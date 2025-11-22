@@ -14,7 +14,6 @@
 
 PlatformData platform = {0};
 
-// --- Surface Handlers ---
 static void HandleSurfaceEnter(void *data, struct wl_surface *surface, struct wl_output *output) {
     for (int i = 0; i < platform.monitorCount; i++) {
         if (platform.monitors[i].output == output) {
@@ -283,12 +282,13 @@ bool init_platform(void) {
     platform.layer_surface = zwlr_layer_shell_v1_get_layer_surface(
         platform.layer_shell, platform.surface, NULL, ZWLR_LAYER_SHELL_V1_LAYER_BACKGROUND, "wayland_app");
 
-    int screen_width = 900, screen_height = 600;
+    int screen_width = 800, screen_height = 600;
 
     zwlr_layer_surface_v1_set_size(platform.layer_surface, screen_width, screen_height);
     zwlr_layer_surface_v1_add_listener(platform.layer_surface, &layerSurfaceListener, &platform);
     zwlr_layer_surface_v1_set_keyboard_interactivity(
-        platform.layer_surface, ZWLR_LAYER_SURFACE_V1_KEYBOARD_INTERACTIVITY_ON_DEMAND);
+        platform.layer_surface,
+        ZWLR_LAYER_SURFACE_V1_KEYBOARD_INTERACTIVITY_NONE);  // No keyboard interactivity--for now ;)
     zwlr_layer_surface_v1_set_exclusive_zone(platform.layer_surface, -1);
 
     platform.egl_window  = wl_egl_window_create(platform.surface, screen_width, screen_height);

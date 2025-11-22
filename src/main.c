@@ -27,9 +27,6 @@ int main() {
 
     pthread_mutex_lock(&audio_data.lock);
     struct cava_plan *plan = cava_init(number_of_bars, audio_data.rate, audio_data.channels, 0, 0.77, 50, 8000);
-    printf(
-        "cava_init(%d, %d, %d, %d, %f, %d, %d);\n", number_of_bars, audio_data.rate, audio_data.channels, 0, 0.77, 50,
-        8000);
     pthread_mutex_unlock(&audio_data.lock);
 
     if (plan->status != 0) {
@@ -48,11 +45,12 @@ int main() {
             audio_data.samples_counter = 0;
         pthread_mutex_unlock(&audio_data.lock);
 
-        glClearColor(0.1f, 0.2f, 0.3f, 0.1f);
+        glClearColor(0.0f, 0.0f, 0.0f, 0.0f);
         glClear(GL_COLOR_BUFFER_BIT);
 
         // Simple visualization: draw bars for each frequency bar
-        int width = 800 / plan->number_of_bars;
+        int   width   = 800 / plan->number_of_bars;
+        float spacing = 2.0f;
         for (int i = 0; i < plan->number_of_bars; i++) {
             float height = (float) (cava_out[i]) * 600.0f;
             if (height > 600.0f)
@@ -60,10 +58,10 @@ int main() {
 
             glBegin(GL_QUADS);
             glColor3f(0.2f, 0.7f, 0.4f);
-            glVertex2f(i * width, 0);
-            glVertex2f(i * width + width - 2, 0);
-            glVertex2f(i * width + width - 2, height);
-            glVertex2f(i * width, height);
+            glVertex2f(i * width + spacing / 2.0, 0);
+            glVertex2f(i * width + width - spacing / 2.0, 0);
+            glVertex2f(i * width + width - spacing / 2.0, height);
+            glVertex2f(i * width + spacing / 2.0, height);
             glEnd();
         }
 

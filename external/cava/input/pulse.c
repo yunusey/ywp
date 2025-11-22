@@ -113,7 +113,6 @@ void *input_pulse(void *data) {
     pa_simple *s = NULL;
     int error;
 
-    printf("%s\n", audio->source);
     if (!(s = pa_simple_new(NULL, "cava", PA_STREAM_RECORD, audio->source, "audio for cava", &ss,
                             NULL, &pb, &error))) {
         sprintf(audio->error_message, __FILE__ ": Could not open pulseaudio source: %s, %s. \

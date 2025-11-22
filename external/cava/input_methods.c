@@ -33,8 +33,6 @@ void create_input_thread(pthread_t *p_thread, struct audio_data *audio, int samp
     audio->cava_in = (double *)malloc(audio->cava_buffer_size * sizeof(double));
     memset(audio->cava_in, 0, audio->cava_buffer_size * sizeof(double));
 
-    audio->source = (char *)malloc(sizeof(char) * 129);
-
     audio->threadparams = 0;
     audio->terminate = 0;
 

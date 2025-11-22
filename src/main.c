@@ -23,9 +23,13 @@ int main() {
     pthread_t audio_thread;
     create_input_thread(&audio_thread, &audio_data, 44100, 16);
 
+    int number_of_bars = 32;
+
     pthread_mutex_lock(&audio_data.lock);
-    struct cava_plan *plan
-        = cava_init(64 / audio_data.channels, audio_data.rate, audio_data.channels, 1, 0.7, 50, 10000);
+    struct cava_plan *plan = cava_init(number_of_bars, audio_data.rate, audio_data.channels, 0, 0.77, 50, 8000);
+    printf(
+        "cava_init(%d, %d, %d, %d, %f, %d, %d);\n", number_of_bars, audio_data.rate, audio_data.channels, 0, 0.77, 50,
+        8000);
     pthread_mutex_unlock(&audio_data.lock);
 
     if (plan->status != 0) {
@@ -33,10 +37,10 @@ int main() {
         return -1;
     }
 
-    double *cava_out = (double *) malloc(sizeof(double) * plan->number_of_bars);
+    double *cava_out = (double *) malloc(sizeof(double) * number_of_bars * audio_data.channels);
     while (true) {
         wl_display_dispatch_pending(platform.display);
-        // wl_display_flush(platform.display);
+        wl_display_flush(platform.display);
 
         pthread_mutex_lock(&audio_data.lock);
         cava_execute(audio_data.cava_in, audio_data.samples_counter, cava_out, plan);
@@ -44,12 +48,7 @@ int main() {
             audio_data.samples_counter = 0;
         pthread_mutex_unlock(&audio_data.lock);
 
-        // Randomize cava_out for testing
-        // for (int i = 0; i < plan->number_of_bars; i++) {
-        //     cava_out[i] = rand() % 100 / 100.0;
-        // }
-
-        glClearColor(0.1f, 0.2f, 0.3f, 1.0f);
+        glClearColor(0.1f, 0.2f, 0.3f, 0.1f);
         glClear(GL_COLOR_BUFFER_BIT);
 
         // Simple visualization: draw bars for each frequency bar
@@ -74,6 +73,16 @@ int main() {
     }
     close_platform();
 
+    pthread_mutex_lock(&audio_data.lock);
+    audio_data.terminate = 1;
+    pthread_mutex_unlock(&audio_data.lock);
+    pthread_join(audio_thread, NULL);
+
+    free(audio_data.source);
+    free(audio_data.cava_in);
+
+    cava_destroy(plan);
+    free(plan);
     free(cava_out);
 
     return 0;

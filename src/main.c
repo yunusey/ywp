@@ -1,4 +1,6 @@
 #include "input_methods.h"
+#include "spline.frag.h"
+#include "spline.vert.h"
 #include <pthread.h>
 #include <assert.h>
 #include "cavacore.h"
@@ -8,38 +10,12 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-// const char *vertex_source = "attribute vec4 a_position;\n"
-//                             "uniform mat4 u_projection;\n"
-//                             "void main() {\n"
-//                             "    gl_Position = u_projection * a_position;\n"
-//                             "}\n";
-//
-// const char *fragment_source = "uniform vec4 u_color;\n"
-//                               "void main() {\n"
-//                               "    gl_FragColor = vec4(gl_FragCoord.xy / vec2(1920., 1080.), 0.0, 1.0);\n"
-//                               "}\n";
-
-void load_shader_source(const char *path, char **source) {
-    FILE *file = fopen(path, "r");
-    if (!file) {
-        printf("Failed to open shader file: %s\n", path);
-        exit(EXIT_FAILURE);
-    }
-
-    fseek(file, 0, SEEK_END);
-    long size = ftell(file);
-    fseek(file, 0, SEEK_SET);
-
-    *source = (char *) malloc(size + 1);
-    fread(*source, 1, size, file);
-    (*source)[size] = '\0';
-
-    fclose(file);
-}
-
-GLuint compile_shader(GLenum type, const char *source) {
+GLuint compile_shader(GLenum type, const char *source, GLint length) {
     GLuint shader = glCreateShader(type);
-    glShaderSource(shader, 1, &source, NULL);
+
+    // FIX: Pass the length to glShaderSource
+    // This tells it to read exactly 'length' bytes
+    glShaderSource(shader, 1, &source, &length);
     glCompileShader(shader);
 
     GLint success;
@@ -52,9 +28,11 @@ GLuint compile_shader(GLenum type, const char *source) {
     return shader;
 }
 
-GLuint create_shader_program(const char *vertex_source, const char *fragment_source) {
-    GLuint vertex_shader   = compile_shader(GL_VERTEX_SHADER, vertex_source);
-    GLuint fragment_shader = compile_shader(GL_FRAGMENT_SHADER, fragment_source);
+GLuint
+create_shader_program(const char *vertex_source, GLint vertex_len, const char *fragment_source, GLint fragment_len) {
+    // FIX: Pass the lengths to compile_shader
+    GLuint vertex_shader   = compile_shader(GL_VERTEX_SHADER, vertex_source, vertex_len);
+    GLuint fragment_shader = compile_shader(GL_FRAGMENT_SHADER, fragment_source, fragment_len);
 
     GLuint shader_program = glCreateProgram();
     glAttachShader(shader_program, vertex_shader);
@@ -111,14 +89,11 @@ int main(int argc, char **argv) {
         return -1;
     }
 
-    const char *shader_frag_path = "shaders/spline.frag";
-    const char *shader_vert_path = "shaders/spline.vert";
-    char       *vertex_source;
-    char       *fragment_source;
-    load_shader_source(shader_vert_path, &vertex_source);
-    load_shader_source(shader_frag_path, &fragment_source);
+    char *vertex_source   = (char *) shaders_spline_vert;
+    char *fragment_source = (char *) shaders_spline_frag;
 
-    GLuint shader_program = create_shader_program(vertex_source, fragment_source);
+    GLuint shader_program = create_shader_program(
+        vertex_source, (GLint) shaders_spline_vert_len, fragment_source, (GLint) shaders_spline_frag_len);
     glUseProgram(shader_program);
 
     float projection_matrix[16];

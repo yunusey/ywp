@@ -28,7 +28,7 @@
         ];
       in {
         packages.default = pkgs.stdenv.mkDerivation {
-          pname = "ywp-deps";
+          pname = "ywp";
           version = "1.0.0";
 
           src = ./.;
@@ -41,11 +41,10 @@
           ];
 
           meta = with pkgs.lib; {
-            description = "YWP dependencies package";
-            homepage = "https://example.com/ywp-deps";
+            description = "ywp - Custom wallpaper manager written in C.";
             license = licenses.mit;
-            maintainers = with maintainers; [your-github-username];
-            platforms = platforms.all;
+            maintainers = with maintainers; [yunusey];
+            platforms = platforms.linux;
           };
         };
         devShells.default = pkgs.mkShell {

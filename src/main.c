@@ -54,7 +54,7 @@ create_shader_program(const char *vertex_source, GLint vertex_len, const char *f
 }
 
 void construct_projection_matrix(
-    float *matrix, float left, float right, float bottom, float top, float near, float far) {
+    float matrix[16], float left, float right, float bottom, float top, float near, float far) {
     // Initialize to zero
     for (int i = 0; i < 16; i++) {
         matrix[i] = 0.0f;
@@ -98,8 +98,7 @@ int main(int argc, char **argv) {
 
     float projection_matrix[16];
     construct_projection_matrix(
-        &projection_matrix[0], 0.0f, (float) core.window_size.width, 0.0f, (float) core.window_size.height, -1.0f,
-        1.0f);
+        projection_matrix, 0.0f, (float) core.window_size.width, 0.0f, (float) core.window_size.height, -1.0f, 1.0f);
     GLint proj_location = glGetUniformLocation(shader_program, "u_projection");
     glUniformMatrix4fv(proj_location, 1, GL_FALSE, projection_matrix);
 

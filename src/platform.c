@@ -1,6 +1,7 @@
 #include "platform.h"
 #include "wlr-layer-shell-client-protocol.h"
 #include <EGL/egl.h>
+#include <GL/gl.h>
 #include <EGL/eglext.h>
 #include <stdbool.h>
 #include <string.h>
@@ -13,8 +14,9 @@
 #include <xkbcommon/xkbcommon.h>
 
 PlatformData platform = {0};
+CoreData     core     = {0};
 
-static void HandleSurfaceEnter(void *data, struct wl_surface *surface, struct wl_output *output) {
+static void handle_surface_enter(void *data, struct wl_surface *surface, struct wl_output *output) {
     for (int i = 0; i < platform.monitorCount; i++) {
         if (platform.monitors[i].output == output) {
             platform.currentMonitorIndex = i;
@@ -22,8 +24,7 @@ static void HandleSurfaceEnter(void *data, struct wl_surface *surface, struct wl
         }
     }
 }
-
-static void HandleSurfaceLeave(void *data, struct wl_surface *surface, struct wl_output *output) {
+static void handle_surface_leave(void *data, struct wl_surface *surface, struct wl_output *output) {
     for (int i = 0; i < platform.monitorCount; i++) {
         if (platform.monitors[i].output == output) {
             platform.currentMonitorIndex = -1;
@@ -31,38 +32,51 @@ static void HandleSurfaceLeave(void *data, struct wl_surface *surface, struct wl
         }
     }
 }
+static const struct wl_surface_listener surface_listener = {
+    .enter = &handle_surface_enter,
+    .leave = &handle_surface_leave,
+};
 
-static const struct wl_surface_listener surfaceListener = {.enter = &HandleSurfaceEnter, .leave = &HandleSurfaceLeave};
-
-static void LayerSurfaceConfigure(
+static void layer_surface_configure(
     void *data, struct zwlr_layer_surface_v1 *zwlr_layer_surface_v1, uint32_t serial, uint32_t width, uint32_t height) {
+    core.window_size.width  = width;
+    core.window_size.height = height;
+
     zwlr_layer_surface_v1_ack_configure(platform.layer_surface, serial);
     wl_egl_window_resize(platform.egl_window, width, height, 0, 0);
+    eglMakeCurrent(platform.egl.device, platform.egl.surface, platform.egl.surface, platform.egl.context);
+    glViewport(0, 0, width, height);
+    glMatrixMode(GL_PROJECTION);
+    glLoadIdentity();
+    glOrtho(0, width, 0, height, -1, 1);
+    glMatrixMode(GL_MODELVIEW);
+    glLoadIdentity();
 }
-static void LayerSurfaceClosed(void *data, struct zwlr_layer_surface_v1 *zwlr_layer_surface_v1) {
+static void layer_surface_closed(void *data, struct zwlr_layer_surface_v1 *zwlr_layer_surface_v1) {
 }
 
-static const struct zwlr_layer_surface_v1_listener layerSurfaceListener
-    = {.configure = &LayerSurfaceConfigure, .closed = &LayerSurfaceClosed};
+static const struct zwlr_layer_surface_v1_listener layer_surface_listener = {
+    .configure = &layer_surface_configure,
+    .closed    = &layer_surface_closed,
+};
 
-// --- Pointer Handlers ---
-static void HandlePointerEnter(
+static void handle_pointer_enter(
     void *data, struct wl_pointer *poiner, uint32_t serial, struct wl_surface *surface, wl_fixed_t sx, wl_fixed_t sy) {
     platform.cursor.input_serial = serial;
 }
-static void HandlePointerLeave(void *data, struct wl_pointer *p, uint32_t s, struct wl_surface *surf) {
+static void handle_pointer_leave(void *data, struct wl_pointer *p, uint32_t s, struct wl_surface *surf) {
 }
-static void HandlePointerMotion(
+static void handle_pointer_motion(
     void *data, struct wl_pointer *wl_pointer, uint32_t time, wl_fixed_t surface_x, wl_fixed_t surface_y) {
     int x = wl_fixed_to_int(surface_x);
     int y = wl_fixed_to_int(surface_y);
 }
-static void HandlePointerButton(
+static void handle_pointer_button(
     void *data, struct wl_pointer *wl_pointer, uint32_t serial, uint32_t time, uint32_t button, uint32_t state) {
     platform.cursor.input_serial = serial;
 }
 static void
-HandlePointerAxis(void *data, struct wl_pointer *wl_pointer, uint32_t time, uint32_t axis, wl_fixed_t value) {
+handle_pointer_axis(void *data, struct wl_pointer *wl_pointer, uint32_t time, uint32_t axis, wl_fixed_t value) {
     // The 'value' is a wl_fixed_t (24.8 fixed-point number).
     // A standard mouse wheel tick is often reported as 10.0 (or 2560 in integer form).
     // We convert it to a float and normalize it so one "tick" becomes 1.0f.
@@ -73,32 +87,28 @@ HandlePointerAxis(void *data, struct wl_pointer *wl_pointer, uint32_t time, uint
     } else if (axis == WL_POINTER_AXIS_HORIZONTAL_SCROLL) {
     }
 }
-static void HandlePointerFrame(void *data, struct wl_pointer *wl_pointer) {
+static void handle_pointer_frame(void *data, struct wl_pointer *wl_pointer) {
+}
+static void handle_pointer_axis_source(void *data, struct wl_pointer *wl_pointer, uint32_t axis_source) {
+}
+static void handle_pointer_axis_stop(void *data, struct wl_pointer *wl_pointer, uint32_t time, uint32_t axis) {
+}
+static void handle_pointer_axis_discrete(void *data, struct wl_pointer *wl_pointer, uint32_t axis, int32_t discrete) {
 }
 
-static void HandlePointerAxisSource(void *data, struct wl_pointer *wl_pointer, uint32_t axis_source) {
-}
-
-static void HandlePointerAxisStop(void *data, struct wl_pointer *wl_pointer, uint32_t time, uint32_t axis) {
-}
-
-static void HandlePointerAxisDiscrete(void *data, struct wl_pointer *wl_pointer, uint32_t axis, int32_t discrete) {
-}
-// --- Pointer Listener Definition ---
 static const struct wl_pointer_listener pointerListener = {
-    .enter         = HandlePointerEnter,
-    .leave         = HandlePointerLeave,
-    .motion        = HandlePointerMotion,
-    .button        = HandlePointerButton,
-    .axis          = HandlePointerAxis,
-    .frame         = HandlePointerFrame,
-    .axis_source   = HandlePointerAxisSource,
-    .axis_stop     = HandlePointerAxisStop,
-    .axis_discrete = HandlePointerAxisDiscrete,
+    .enter         = handle_pointer_enter,
+    .leave         = handle_pointer_leave,
+    .motion        = handle_pointer_motion,
+    .button        = handle_pointer_button,
+    .axis          = handle_pointer_axis,
+    .frame         = handle_pointer_frame,
+    .axis_source   = handle_pointer_axis_source,
+    .axis_stop     = handle_pointer_axis_stop,
+    .axis_discrete = handle_pointer_axis_discrete,
 };
 
-// --- Keyboard Handlers ---
-static void HandleKeyboardKeymap(void *data, struct wl_keyboard *kb, uint32_t format, int32_t fd, uint32_t size) {
+static void handle_keyboard_keymap(void *data, struct wl_keyboard *kb, uint32_t format, int32_t fd, uint32_t size) {
     if (format != WL_KEYBOARD_KEYMAP_FORMAT_XKB_V1) {
         close(fd);
         return;
@@ -120,35 +130,33 @@ static void HandleKeyboardKeymap(void *data, struct wl_keyboard *kb, uint32_t fo
     platform.xkb.state = xkb_state_new(platform.xkb.keymap);
 }
 static void
-HandleKeyboardEnter(void *data, struct wl_keyboard *kb, uint32_t s, struct wl_surface *surf, struct wl_array *keys) {
+handle_keyboard_enter(void *data, struct wl_keyboard *kb, uint32_t s, struct wl_surface *surf, struct wl_array *keys) {
 }
-static void HandleKeyboardLeave(void *data, struct wl_keyboard *kb, uint32_t s, struct wl_surface *surf) {
+static void handle_keyboard_leave(void *data, struct wl_keyboard *kb, uint32_t s, struct wl_surface *surf) {
 }
 static void
-HandleKeyboardKey(void *data, struct wl_keyboard *kb, uint32_t s, uint32_t time, uint32_t key, uint32_t state) {
+handle_keyboard_key(void *data, struct wl_keyboard *kb, uint32_t s, uint32_t time, uint32_t key, uint32_t state) {
 }
-static void HandleKeyboardModifiers(
+static void handle_keyboard_modifiers(
     void *data, struct wl_keyboard *kb, uint32_t s, uint32_t mods_depressed, uint32_t mods_latched,
     uint32_t mods_locked, uint32_t group) {
     if (!platform.xkb.state)
         return;
     xkb_state_update_mask(platform.xkb.state, mods_depressed, mods_latched, mods_locked, 0, 0, group);
 }
-static void HandleKeyboardRepeatInfo(void *data, struct wl_keyboard *wl_keyboard, int32_t rate, int32_t delay) {
+static void handle_keyboard_repeat_info(void *data, struct wl_keyboard *wl_keyboard, int32_t rate, int32_t delay) {
 }
 
-// --- Keyboard Listener Definition ---
-static const struct wl_keyboard_listener keyboardListener = {
-    .keymap      = HandleKeyboardKeymap,
-    .enter       = HandleKeyboardEnter,
-    .leave       = HandleKeyboardLeave,
-    .key         = HandleKeyboardKey,
-    .modifiers   = HandleKeyboardModifiers,
-    .repeat_info = HandleKeyboardRepeatInfo,
+static const struct wl_keyboard_listener keyboard_listener = {
+    .keymap      = handle_keyboard_keymap,
+    .enter       = handle_keyboard_enter,
+    .leave       = handle_keyboard_leave,
+    .key         = handle_keyboard_key,
+    .modifiers   = handle_keyboard_modifiers,
+    .repeat_info = handle_keyboard_repeat_info,
 };
 
-// --- Seat Handler ---
-static void HandleSeatCapabilities(void *data, struct wl_seat *seat, uint32_t capabilities) {
+static void handle_seat_capabilities(void *data, struct wl_seat *seat, uint32_t capabilities) {
     if ((capabilities & WL_SEAT_CAPABILITY_POINTER) && !platform.pointer) {
         platform.pointer = wl_seat_get_pointer(seat);
         wl_pointer_add_listener(platform.pointer, &pointerListener, NULL);
@@ -159,24 +167,23 @@ static void HandleSeatCapabilities(void *data, struct wl_seat *seat, uint32_t ca
     }
     if ((capabilities & WL_SEAT_CAPABILITY_KEYBOARD) && !platform.keyboard) {
         platform.keyboard = wl_seat_get_keyboard(seat);
-        wl_keyboard_add_listener(platform.keyboard, &keyboardListener, NULL);
+        wl_keyboard_add_listener(platform.keyboard, &keyboard_listener, NULL);
     }
     if (!(capabilities & WL_SEAT_CAPABILITY_KEYBOARD) && platform.keyboard) {
         wl_keyboard_release(platform.keyboard);
         platform.keyboard = NULL;
     }
 }
-static void HandleSeatName(void *data, struct wl_seat *seat, const char *name) {
+static void handle_seat_name(void *data, struct wl_seat *seat, const char *name) {
 }
 
-// --- Seat Listener Definition ---
-static const struct wl_seat_listener seatListener = {
-    .capabilities = HandleSeatCapabilities,
-    .name         = HandleSeatName,
+static const struct wl_seat_listener seat_listener = {
+    .capabilities = handle_seat_capabilities,
+    .name         = handle_seat_name,
 };
 
-static void
-HandleOutputMode(void *data, struct wl_output *output, uint32_t flags, int32_t width, int32_t height, int32_t refresh) {
+static void handle_output_mode(
+    void *data, struct wl_output *output, uint32_t flags, int32_t width, int32_t height, int32_t refresh) {
     MonitorData *monitor = data;
     if (flags & WL_OUTPUT_MODE_CURRENT) {
         monitor->width   = width;
@@ -184,57 +191,57 @@ HandleOutputMode(void *data, struct wl_output *output, uint32_t flags, int32_t w
         monitor->refresh = refresh;
     }
 }
-static void HandleOutputScale(void *data, struct wl_output *output, int32_t factor) {
+static void handle_output_scale(void *data, struct wl_output *output, int32_t factor) {
     MonitorData *monitor = data;
     monitor->scale       = factor;
 }
-static void HandleOutputGeometry(
+static void handle_output_geometry(
     void *data, struct wl_output *output, int32_t x, int32_t y, int32_t physical_width, int32_t physical_height,
     int32_t subpixel, const char *make, const char *model, int32_t transform) {
 }
-static void HandleOutputDone(void *data, struct wl_output *output) {
+static void handle_output_done(void *data, struct wl_output *output) {
 }
-static void HandleOutputName(void *data, struct wl_output *output, const char *name) {
+static void handle_output_name(void *data, struct wl_output *output, const char *name) {
 }
-static void HandleOutputDescription(void *data, struct wl_output *output, const char *description) {
+static void handle_output_description(void *data, struct wl_output *output, const char *description) {
 }
 
-static const struct wl_output_listener outputListener
-    = {.mode        = HandleOutputMode,
-       .scale       = HandleOutputScale,
-       .geometry    = HandleOutputGeometry,
-       .done        = HandleOutputDone,
-       .name        = HandleOutputName,
-       .description = HandleOutputDescription};
+static const struct wl_output_listener output_listener = {
+    .mode        = handle_output_mode,
+    .scale       = handle_output_scale,
+    .geometry    = handle_output_geometry,
+    .done        = handle_output_done,
+    .name        = handle_output_name,
+    .description = handle_output_description,
+};
 
-static void
-RegistryHandleGlobal(void *data, struct wl_registry *registry, uint32_t name, const char *interface, uint32_t version) {
+static void registry_handle_global(
+    void *data, struct wl_registry *registry, uint32_t name, const char *interface, uint32_t version) {
     if (strcmp(interface, wl_compositor_interface.name) == 0) {
         platform.compositor = wl_registry_bind(registry, name, &wl_compositor_interface, 4);
     } else if (strcmp(interface, zwlr_layer_shell_v1_interface.name) == 0) {
         platform.layer_shell = wl_registry_bind(registry, name, &zwlr_layer_shell_v1_interface, 1);
     } else if (strcmp(interface, wl_seat_interface.name) == 0) {
         platform.seat = wl_registry_bind(registry, name, &wl_seat_interface, 7);
-        wl_seat_add_listener(platform.seat, &seatListener, NULL);
+        wl_seat_add_listener(platform.seat, &seat_listener, NULL);
     } else if (strcmp(interface, wl_shm_interface.name) == 0) {
         platform.cursor.shm = wl_registry_bind(registry, name, &wl_shm_interface, 1);
     } else if (strcmp(interface, wl_output_interface.name) == 0) {
         if (platform.monitorCount < MAX_MONITORS) {
             MonitorData *monitor = &platform.monitors[platform.monitorCount];
             monitor->output      = wl_registry_bind(registry, name, &wl_output_interface, 4);
-            wl_output_add_listener(monitor->output, &outputListener, monitor);
+            wl_output_add_listener(monitor->output, &output_listener, monitor);
             platform.monitorCount++;
         } else {
         }
     }
 }
-static void RegistryHandleGlobalRemove(void *data, struct wl_registry *registry, uint32_t name) {
+static void registry_handle_global_remove(void *data, struct wl_registry *registry, uint32_t name) {
 }
 
-// --- Registry Listener Definition ---
-static const struct wl_registry_listener registryListener = {
-    .global        = RegistryHandleGlobal,
-    .global_remove = RegistryHandleGlobalRemove,
+static const struct wl_registry_listener registry_listener = {
+    .global        = registry_handle_global,
+    .global_remove = registry_handle_global_remove,
 };
 
 bool init_platform(void) {
@@ -248,7 +255,7 @@ bool init_platform(void) {
     platform.display = wl_display_connect(NULL);
 
     platform.registry = wl_display_get_registry(platform.display);
-    wl_registry_add_listener(platform.registry, &registryListener, NULL);
+    wl_registry_add_listener(platform.registry, &registry_listener, NULL);
     wl_display_roundtrip(platform.display);
 
     platform.egl.device = eglGetDisplay((EGLNativeDisplayType) platform.display);
@@ -269,7 +276,7 @@ bool init_platform(void) {
     }
 
     platform.surface = wl_compositor_create_surface(platform.compositor);
-    wl_surface_add_listener(platform.surface, &surfaceListener, NULL);
+    wl_surface_add_listener(platform.surface, &surface_listener, NULL);
     if (platform.surface == NULL) {
         return -1;
     }
@@ -282,16 +289,19 @@ bool init_platform(void) {
     platform.layer_surface = zwlr_layer_shell_v1_get_layer_surface(
         platform.layer_shell, platform.surface, NULL, ZWLR_LAYER_SHELL_V1_LAYER_BACKGROUND, "wayland_app");
 
-    int screen_width = 800, screen_height = 600;
-
-    zwlr_layer_surface_v1_set_size(platform.layer_surface, screen_width, screen_height);
-    zwlr_layer_surface_v1_add_listener(platform.layer_surface, &layerSurfaceListener, &platform);
+    // zwlr_layer_surface_v1_set_size(platform.layer_surface, screen_width, screen_height);
+    zwlr_layer_surface_v1_set_size(platform.layer_surface, 0, 0);
+    zwlr_layer_surface_v1_set_anchor(
+        platform.layer_surface, ZWLR_LAYER_SURFACE_V1_ANCHOR_TOP | ZWLR_LAYER_SURFACE_V1_ANCHOR_BOTTOM
+                                    | ZWLR_LAYER_SURFACE_V1_ANCHOR_LEFT | ZWLR_LAYER_SURFACE_V1_ANCHOR_RIGHT);
+    zwlr_layer_surface_v1_add_listener(platform.layer_surface, &layer_surface_listener, &platform);
     zwlr_layer_surface_v1_set_keyboard_interactivity(
         platform.layer_surface,
         ZWLR_LAYER_SURFACE_V1_KEYBOARD_INTERACTIVITY_NONE);  // No keyboard interactivity--for now ;)
     zwlr_layer_surface_v1_set_exclusive_zone(platform.layer_surface, -1);
 
-    platform.egl_window  = wl_egl_window_create(platform.surface, screen_width, screen_height);
+    platform.egl_window
+        = wl_egl_window_create(platform.surface, 800, 600);  // Initial size; will be resized on configure
     platform.egl.surface = eglCreateWindowSurface(
         platform.egl.device, platform.egl.config, (EGLNativeWindowType) platform.egl_window, NULL);
     wl_surface_commit(platform.surface);

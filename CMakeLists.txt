@@ -11,10 +11,13 @@ file(GLOB_RECURSE SOURCES "${SRC_DIR}/*.c")
 add_subdirectory(external/wlrlayer)
 add_subdirectory(external/cava)
 
+option(ENABLE_ASAN "Enable AddressSanitizer" ON)
+
 add_executable(
 	ywp
 	${SOURCES}
 )
+
 
 target_include_directories(
 	ywp
@@ -43,3 +46,8 @@ target_link_libraries(
 	wlrlayer
 	cava
 )
+
+if(ENABLE_ASAN)
+	target_compile_options(ywp PRIVATE -fsanitize=address -fno-omit-frame-pointer)
+	target_link_options(ywp PRIVATE -fsanitize=address)
+endif()

@@ -60,7 +60,16 @@ typedef struct {
     } egl;
 } PlatformData;
 
+typedef struct CoreData {
+    struct window_size {
+        int width;
+        int height;
+    } window_size;
+} CoreData;
+
+// Similar to rayib's pattern
 extern PlatformData platform;
+extern CoreData     core;
 
 bool init_platform();
 bool close_platform();

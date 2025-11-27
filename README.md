@@ -66,7 +66,7 @@ Currently, `ywp` does not support loading shaders at runtime—but this is a fea
 * [ ] Mouse and keyboard interactions
 * [ ] Multi-monitor support
 
-> [!WARN]
+> [!WARNING]
 > The Wayland Layer Shell Protocol is feature-rich. While `ywp` currently does not support input handling, the protocol *does* allow both mouse and keyboard interaction. Mouse input should be relatively easy to integrate; keyboard input is considerably trickier and adds unnecessary complexity at this stage.
 >
 > If you want keyboard input in your own layer-shell-based project, I recommend taking a look at [my Raylib fork](https://github.com/yunusey/raylib), which adds `wlrlayer` as a Raylib platform. It works well, but the complexity is outside the scope of `ywp`, so it's not included by default. I plan to include an example demonstrating how to use Raylib to draw surfaces via Layer Shell in the future.

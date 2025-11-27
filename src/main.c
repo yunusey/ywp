@@ -1,75 +1,26 @@
-#include "input_methods.h"
-#include "spline.frag.h"
-#include "spline.vert.h"
-#include <pthread.h>
 #include <assert.h>
-#include "cavacore.h"
-#include "platform.h"
-#include <GL/gl.h>
-#include <GLES3/gl3.h>
+#include <pthread.h>
+#include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <time.h>
 
-GLuint compile_shader(GLenum type, const char *source, GLint length) {
-    GLuint shader = glCreateShader(type);
+#include "cavacore.h"
+#include "input_methods.h"
+#include "platform.h"
+#include "shader.h"
 
-    // FIX: Pass the length to glShaderSource
-    // This tells it to read exactly 'length' bytes
-    glShaderSource(shader, 1, &source, &length);
-    glCompileShader(shader);
+#define TARGET_FPS 30
 
-    GLint success;
-    glGetShaderiv(shader, GL_COMPILE_STATUS, &success);
-    if (!success) {
-        char infoLog[512];
-        glGetShaderInfoLog(shader, 512, NULL, infoLog);
-        printf("ERROR::SHADER::COMPILATION_FAILED\n%s\n", infoLog);
-    }
-    return shader;
+float get_monotonic_time()
+{
+    struct timespec ts;
+    clock_gettime(CLOCK_MONOTONIC, &ts);
+    return (float)ts.tv_sec + (float)ts.tv_nsec / 1e9f;
 }
 
-GLuint
-create_shader_program(const char *vertex_source, GLint vertex_len, const char *fragment_source, GLint fragment_len) {
-    // FIX: Pass the lengths to compile_shader
-    GLuint vertex_shader   = compile_shader(GL_VERTEX_SHADER, vertex_source, vertex_len);
-    GLuint fragment_shader = compile_shader(GL_FRAGMENT_SHADER, fragment_source, fragment_len);
-
-    GLuint shader_program = glCreateProgram();
-    glAttachShader(shader_program, vertex_shader);
-    glAttachShader(shader_program, fragment_shader);
-    glLinkProgram(shader_program);
-
-    GLint success;
-    glGetProgramiv(shader_program, GL_LINK_STATUS, &success);
-    if (!success) {
-        char infoLog[512];
-        glGetProgramInfoLog(shader_program, 512, NULL, infoLog);
-        printf("ERROR::SHADER::PROGRAM::LINKING_FAILED\n%s\n", infoLog);
-    }
-
-    glDeleteShader(vertex_shader);
-    glDeleteShader(fragment_shader);
-
-    return shader_program;
-}
-
-void construct_projection_matrix(
-    float matrix[16], float left, float right, float bottom, float top, float near, float far) {
-    // Initialize to zero
-    for (int i = 0; i < 16; i++) {
-        matrix[i] = 0.0f;
-    }
-
-    matrix[0]  = 2.0f / (right - left);
-    matrix[5]  = 2.0f / (top - bottom);
-    matrix[10] = -2.0f / (far - near);
-    matrix[12] = -(right + left) / (right - left);
-    matrix[13] = -(top + bottom) / (top - bottom);
-    matrix[14] = -(far + near) / (far - near);
-    matrix[15] = 1.0f;
-}
-
-int main(int argc, char **argv) {
+int main(int argc, char **argv)
+{
     init_platform();
 
     struct audio_data audio_data = {0};
@@ -80,50 +31,59 @@ int main(int argc, char **argv) {
 
     int bars_per_channel = 8;
 
-    pthread_mutex_lock(&audio_data.lock);
-    struct cava_plan *plan = cava_init(bars_per_channel, audio_data.rate, audio_data.channels, 1, 0.77, 50, 8000);
-    pthread_mutex_unlock(&audio_data.lock);
-
-    if (plan->status != 0) {
+    struct cava_plan *plan = cava_init(bars_per_channel, audio_data.rate, audio_data.channels, 0, 0.77, 50, 8000);
+    if (plan->status != 0)
+    {
         printf("Error initializing cava: %s\n", plan->error_message);
         return -1;
     }
 
-    char *vertex_source   = (char *) shaders_spline_vert;
-    char *fragment_source = (char *) shaders_spline_frag;
+    // char *vertex_source = (char *)shaders_spline_vert;
+    // GLint vertex_len = (GLint)shaders_spline_vert_len;
+    // char *fragment_source = (char *)shaders_spline_frag;
+    // GLint fragment_len = (GLint)shaders_spline_frag_len;
 
-    GLuint shader_program = create_shader_program(
-        vertex_source, (GLint) shaders_spline_vert_len, fragment_source, (GLint) shaders_spline_frag_len);
+    char *vertex_source = (char *)shaders_circular_vert;
+    GLint vertex_len = (GLint)shaders_circular_vert_len;
+    char *fragment_source = (char *)shaders_circular_frag;
+    GLint fragment_len = (GLint)shaders_circular_frag_len;
+
+    GLuint shader_program = create_shader_program(vertex_source, vertex_len, fragment_source, fragment_len);
     glUseProgram(shader_program);
 
     float projection_matrix[16];
-    construct_projection_matrix(
-        projection_matrix, 0.0f, (float) core.window_size.width, 0.0f, (float) core.window_size.height, -1.0f, 1.0f);
+    construct_projection_matrix(projection_matrix, 0.0f, (float)core.window_size.width, 0.0f,
+                                (float)core.window_size.height, -1.0f, 1.0f);
     GLint proj_location = glGetUniformLocation(shader_program, "u_projection");
     glUniformMatrix4fv(proj_location, 1, GL_FALSE, projection_matrix);
 
     GLint viewport_location = glGetUniformLocation(shader_program, "u_viewport");
-    glUniform2f(viewport_location, (float) core.window_size.width, (float) core.window_size.height);
+    glUniform2f(viewport_location, (float)core.window_size.width, (float)core.window_size.height);
 
     GLint num_bars_location = glGetUniformLocation(shader_program, "u_num_bars");
     glUniform1i(num_bars_location, bars_per_channel * audio_data.channels);
 
-    GLint thickness_location = glGetUniformLocation(shader_program, "u_thickness");
-    glUniform1f(thickness_location, 10.0f);
+    GLint time_location = glGetUniformLocation(shader_program, "u_time");
 
     // Our spline buffer
-    // We assume that the number of bars per channel is known and fixed so that we can allocate the buffer once
+    // We assume that the number of bars per channel is known and fixed so that
+    // we can allocate the buffer once
     GLuint ssbo;
     glGenBuffers(1, &ssbo);
     glBindBuffer(GL_SHADER_STORAGE_BUFFER, ssbo);
-    glBufferData(
-        GL_SHADER_STORAGE_BUFFER, sizeof(double) * bars_per_channel * audio_data.channels, NULL, GL_DYNAMIC_DRAW);
+    glBufferData(GL_SHADER_STORAGE_BUFFER, sizeof(double) * bars_per_channel * audio_data.channels, NULL,
+                 GL_DYNAMIC_DRAW);
     glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 0, ssbo);
     glBindBuffer(GL_SHADER_STORAGE_BUFFER, 0);
 
-    double *cava_out   = (double *) malloc(sizeof(double) * bars_per_channel * audio_data.channels);
-    float  *cava_out_f = (float *) malloc(sizeof(float) * bars_per_channel * audio_data.channels);
-    while (true) {
+    double *cava_out = (double *)malloc(sizeof(double) * bars_per_channel * audio_data.channels);
+    assert(cava_out != NULL);
+
+    const float frame_time = 1.0f / TARGET_FPS;
+    const float start_time = get_monotonic_time();
+    float last_iteration_time = 0.0f;
+    while (true)
+    {
         wl_display_dispatch_pending(platform.display);
         wl_display_flush(platform.display);
 
@@ -143,19 +103,27 @@ int main(int argc, char **argv) {
         glVertex2f(0.0f, core.window_size.height);
         glEnd();
 
-        for (int i = 0; i < bars_per_channel * audio_data.channels; i++) {
-            cava_out_f[i] = (float) cava_out[i];
-        }
-
         // Update SSBO with cava_out data
         glBindBuffer(GL_SHADER_STORAGE_BUFFER, ssbo);
-        glBufferSubData(
-            GL_SHADER_STORAGE_BUFFER, 0, sizeof(float) * bars_per_channel * audio_data.channels, cava_out_f);
+        glBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, sizeof(double) * bars_per_channel * audio_data.channels, cava_out);
         glBindBuffer(GL_SHADER_STORAGE_BUFFER, 0);
+
+        // Update time uniform
+        float current_time = get_monotonic_time() - start_time;
+        printf("Time: %f\n", current_time);
+        glUniform1f(time_location, current_time);
 
         eglSwapBuffers(platform.egl.device, platform.egl.surface);
 
-        usleep(10000);
+        // We want to run at TARGET_FPS
+        current_time = get_monotonic_time() - start_time;
+        float elapsed_time = current_time - last_iteration_time;
+        if (elapsed_time < frame_time)
+        {
+            float time_to_sleep = frame_time - elapsed_time;
+            usleep((useconds_t)(time_to_sleep * 1e6f));
+        }
+        last_iteration_time = current_time;
     }
     close_platform();
 

@@ -1,12 +1,14 @@
 #version 310 es
 precision highp float;
 
-uniform vec2 u_viewport;
-uniform int  u_num_bars;
-uniform float u_thickness;
+#define PI 3.14159265358979323846
 
-layout(std430, binding = 0) buffer SplineBuffer {
-    float control_points[];
+uniform vec2 u_viewport;
+uniform int u_num_bars;
+uniform float u_time;
+
+layout(std430, binding = 0) buffer CavaBuffer {
+    double cava_out[];
 };
 
 #define CATPPUCCIN_SIZE 14
@@ -26,6 +28,8 @@ vec3 catppuccin_mocha[CATPPUCCIN_SIZE] = vec3[](
     vec3(0.537, 0.706, 0.980), // Blue  
     vec3(0.706, 0.745, 0.996)  // Lavender  
 );
+
+#define BLEND_FACTOR 0.0
 
 vec4 background_color = vec4(0.118, 0.118, 0.180, 1.0);
 
@@ -55,29 +59,28 @@ void main() {
     int i2 = clamp(idx + 1, 0, u_num_bars - 1);
     int i3 = clamp(idx + 2, 0, u_num_bars - 1);
 
-    // Read safely from SSBO
-    float p0 = control_points[i0];
-    float p1 = control_points[i1];
-    float p2 = control_points[i2];
-    float p3 = control_points[i3];
+    double p0_d = cava_out[i0];
+    double p1_d = cava_out[i1];
+    double p2_d = cava_out[i2];
+    double p3_d = cava_out[i3];
+
+    float p0 = float(p0_d);
+    float p1 = float(p1_d);
+    float p2 = float(p2_d);
+    float p3 = float(p3_d);
 
     float splineY = catmullRom(p0, p1, p2, p3, t);
 
-    // Background above spline
     if (y_norm > splineY) {
         fragColor = background_color;
         return;
     }
 
-    // Below spline → apply Catppuccin color based on x coordinate
-	float color_f = x_norm * float(CATPPUCCIN_SIZE - 1);
+    float color_f = x_norm * float(CATPPUCCIN_SIZE - 1);
     int color_idx0 = int(floor(color_f));
-	int color_idx1 = min(color_idx0 + 1, CATPPUCCIN_SIZE - 1);
-	float blend = fract(color_f);
-	// float blend = 0.0; // No blend
+    int color_idx1 = min(color_idx0 + 1, CATPPUCCIN_SIZE - 1);
 
-    vec3 baseColor = mix(catppuccin_mocha[color_idx0], catppuccin_mocha[color_idx1], blend);
-
+    vec3 baseColor = mix(catppuccin_mocha[color_idx0], catppuccin_mocha[color_idx1], BLEND_FACTOR);
     fragColor = vec4(baseColor, 1.0);
 }
 

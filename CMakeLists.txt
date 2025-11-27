@@ -29,10 +29,7 @@ foreach(SHADER_FILE ${SHADERS})
 	add_custom_command(
 		OUTPUT  ${HEADER_FILE}
 		COMMAND ${XXD_EXE} -i -n ${VAR_NAME} ${SHADER_FILE} ${HEADER_FILE}
-		# This is the C variable name xxd will use
-		COMMAND ${CMAKE_COMMAND} -E rename ${HEADER_FILE} ${HEADER_FILE} # This is a trick to update timestamp
-		# This tells CMake the .h file depends on the shader file.
-		# If you edit the shader, CMake will re-run xxd.
+		COMMAND ${CMAKE_COMMAND} -E rename ${HEADER_FILE} ${HEADER_FILE}
 		MAIN_DEPENDENCY ${SHADER_FILE}
 		COMMENT "Embedding shader: ${SHADER_REL_PATH}"
 	)
@@ -75,7 +72,8 @@ target_link_libraries(
 	cava
 )
 
-if(ENABLE_ASAN)
+# If in Debug mode, enable AddressSanitizer, and disable otherwise--slows down release builds significantly
+if(ENABLE_ASAN AND CMAKE_BUILD_TYPE STREQUAL "Debug")
 	target_compile_options(ywp PRIVATE -fsanitize=address -fno-omit-frame-pointer)
 	target_link_options(ywp PRIVATE -fsanitize=address)
 endif()

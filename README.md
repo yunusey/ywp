@@ -5,6 +5,12 @@
 
 *`ywp` is a lightweight wallpaper-based music visualizer designed to integrate the power of [cava](https://github.com/karlstav/cava) with the [Wayland Layer Shell Protocol](https://wayland.app/protocols/wlr-layer-shell-unstable-v1).*
 
+## Showcase
+
+| [`circular`](./shaders/circular.frag) | [`spline`](./shaders/spline.frag) |
+| :-----------------------------------: | :-----------------------------------: |
+| ![](./assets/circular-demo.avif)      | ![](./assets/spline-demo.avif)      |
+
 ## Philosophy
 
 `cava` is a powerful piece of software that supports a variety of audio backends. It dynamically captures audio waveforms in real time, applies FFT via [FFTW](https://fftw.org), and exposes the processed data for visualization. It even has SDL support for shader-based rendering.
